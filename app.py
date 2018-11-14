@@ -4,6 +4,7 @@ from O365 import Schedule
 from datetime import datetime
 import os
 import time
+import json
 
 app = Flask(__name__)
 api = Api(app)
@@ -16,30 +17,38 @@ class HelloWorld(Resource):
 
 class OfficeCalendarStatus(Resource):
     def get(self):
+        time_string = '%Y-%m-%dT%H:%M:%SZ'
+        response = {
+            "name": "Binary sensor",
+            "state": {
+                "open": "false",
+                "timestamp": datetime.strftime(datetime.utcnow(), time_string)
+            }
+        }
         # query for all calendar events 24 hrs before and after "now"
         office_email = os.environ["OFFICE_USER"]
         office_pw = os.environ["OFFICE_PASSWORD"]
-        time_string = '%Y-%m-%dT%H:%M:%SZ'
         start_time = time.strftime(time_string, time.gmtime(time.time() - (60 * 60 * 24)))
         end_time = time.strftime(time_string, time.gmtime(time.time() + (60 * 60 * 24)))
         schedule = Schedule((office_email, office_pw))
         try:
             schedule.getCalendars()
         except:
-            return False
+            return json.dumps(response)
         for cal in schedule.calendars:
             try:
                 result = cal.getEvents(start=start_time, end=end_time)
             except:
-                return False
+                return json.dumps(response)
             for event in cal.events:
                 event_json = event.toJson()
                 if event_json["ShowAs"] == "Busy":
                     start = datetime.strptime(event_json["Start"], "%Y-%m-%dT%H:%M:%SZ")
                     end = datetime.strptime(event_json["End"], "%Y-%m-%dT%H:%M:%SZ")
                     if start < datetime.utcnow() < end:
-                        return True
-        return False
+                        response['state']['open'] = 'true'
+                        return json.dumps(response)
+        return json.dumps(response)
 
 
 api.add_resource(HelloWorld, '/')
