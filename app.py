@@ -34,12 +34,12 @@ class OfficeCalendarStatus(Resource):
         try:
             schedule.getCalendars()
         except:
-            return json.dumps(response)
+            return response
         for cal in schedule.calendars:
             try:
                 result = cal.getEvents(start=start_time, end=end_time)
             except:
-                return json.dumps(response)
+                return response
             for event in cal.events:
                 event_json = event.toJson()
                 if event_json["ShowAs"] == "Busy":
@@ -47,8 +47,8 @@ class OfficeCalendarStatus(Resource):
                     end = datetime.strptime(event_json["End"], "%Y-%m-%dT%H:%M:%SZ")
                     if start < datetime.utcnow() < end:
                         response['state']['open'] = 'true'
-                        return json.dumps(response)
-        return json.dumps(response)
+                        return response
+        return response
 
 
 api.add_resource(HelloWorld, '/')
