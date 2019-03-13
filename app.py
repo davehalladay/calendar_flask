@@ -1,18 +1,17 @@
-from flask import Flask
-from flask_restful import Resource, Api
-from O365 import Schedule
-from datetime import datetime
 import os
 import time
-import json
+from datetime import datetime
+
+import pytz
+from O365 import Account
+from O365.calendar import EventShowAs
+from flask import Flask
+from flask_restful import Resource, Api
 
 app = Flask(__name__)
 api = Api(app)
 
-
-class HelloWorld(Resource):
-    def get(self):
-        return {'hello': 'world'}
+# account.authenticate(scopes=['basic', 'https://graph.microsoft.com/Calendars.Read'])
 
 
 class OfficeCalendarStatus(Resource):
@@ -25,33 +24,25 @@ class OfficeCalendarStatus(Resource):
                 "timestamp": datetime.strftime(datetime.utcnow(), time_string)
             }
         }
-        # query for all calendar events 24 hrs before and after "now"
-        office_email = os.environ["OFFICE_USER"]
-        office_pw = os.environ["OFFICE_PASSWORD"]
+        credentials = (os.environ["APPLICATION_ID"], os.environ["APPLICATION_SECRET"])
         start_time = time.strftime(time_string, time.gmtime(time.time() - (60 * 60 * 24)))
         end_time = time.strftime(time_string, time.gmtime(time.time() + (60 * 60 * 24)))
-        schedule = Schedule((office_email, office_pw))
         try:
-            schedule.getCalendars()
+            account = Account(credentials)
+            schedule = account.schedule()
+            calendar = schedule.get_default_calendar()
+            q = calendar.new_query('start').greater_equal(start_time)
+            q.chain().on_attribute('end').less_equal(end_time)
+            events = calendar.get_events(query=q)
+            for event in events:
+                if event.show_as == EventShowAs.Busy and event.start < datetime.now(tz=pytz.utc) < event.end:
+                    response["state"]["open"] = "true"
+                    return response
         except:
             return response
-        for cal in schedule.calendars:
-            try:
-                result = cal.getEvents(start=start_time, end=end_time)
-            except:
-                return response
-            for event in cal.events:
-                event_json = event.toJson()
-                if event_json["ShowAs"] == "Busy":
-                    start = datetime.strptime(event_json["Start"], "%Y-%m-%dT%H:%M:%SZ")
-                    end = datetime.strptime(event_json["End"], "%Y-%m-%dT%H:%M:%SZ")
-                    if start < datetime.utcnow() < end:
-                        response['state']['open'] = 'true'
-                        return response
         return response
 
 
-api.add_resource(HelloWorld, '/')
 api.add_resource(OfficeCalendarStatus, '/api/calendarStatus')
 
 if __name__ == "__main__":
