@@ -38,7 +38,8 @@ class OfficeCalendarStatus(Resource):
                 if event.show_as == EventShowAs.Busy and event.start < datetime.now(tz=pytz.utc) < event.end:
                     response["state"]["open"] = "true"
                     return response
-        except:
+        except Exception as e:
+            app.logger.error(e)
             return response
         return response
 
